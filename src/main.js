@@ -2,29 +2,64 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { decks } from './cards.js';
 import './style.css';
-const app=document.querySelector('#app'), storageKey='love-cards-progress-v1';
+const app=document.querySelector('#app'), storageKey='love-cards-progress-v1', favoritesKey='love-cards-favorites-v1';
+const backArtwork=new Image();backArtwork.src='/conversation-card-back.png';
 let saved={}; try {saved=JSON.parse(localStorage.getItem(storageKey)||'{}');} catch {saved={};}
 let cleanup=()=>{};
 function persist(){try{localStorage.setItem(storageKey,JSON.stringify(saved));}catch{}}
 function shuffle(n){const a=Array.from({length:n},(_,i)=>i);for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function shell(content){app.innerHTML=`<div class="shell"><header><div class="brand"><span>♡</span> Love Cards</div><small>Một chút thời gian, nhiều điều để hiểu nhau</small></header>${content}</div>`;}
-function home(){cleanup();shell(`<main class="home"><div class="intro"><span class="eyebrow">Dành thời gian cho nhau</span><h1>Mỗi câu hỏi,<br><em>một câu chuyện.</em></h1><p>Mở lòng qua những câu chuyện nhỏ và khám phá thêm về người bạn yêu thương.</p></div><h2 class="section-title">Chọn bộ bài của bạn</h2><div class="decks">${decks.map((d,i)=>`<button class="deck" data-deck="${d.id}"><span class="icon">${['♡','✿','∞'][i]}</span><h2>${d.name}</h2><p>${d.description}<span class="count">${d.questions.length} thẻ →</span></p></button>`).join('')}</div></main>`);app.querySelectorAll('[data-deck]').forEach(b=>b.onclick=()=>play(decks.find(d=>d.id===b.dataset.deck)));}
+function home(){cleanup();shell(`<main class="home"><div class="home-hero"><div class="intro"><span class="eyebrow">Dành thời gian cho nhau</span><h1>Mỗi câu hỏi,<br><em>một câu chuyện.</em></h1><p>Mở lòng qua những câu chuyện nhỏ và khám phá thêm về người bạn yêu thương.</p></div><div class="mascot-canvas" aria-hidden="true"></div></div><h2 class="section-title">Chọn bộ bài của bạn</h2><div class="decks">${decks.map((d,i)=>`<button class="deck" data-deck="${d.id}"><span class="icon">${['♡','✿','∞'][i]}</span><h2>${d.name}</h2><p>${d.description}<span class="count">${d.questions.length} thẻ →</span></p></button>`).join('')}</div></main>`);cleanup=setupHomeMascot();app.querySelectorAll('[data-deck]').forEach(b=>b.onclick=()=>play(decks.find(d=>d.id===b.dataset.deck)));}
+function createInPlaceRunClip(animations){const source=animations[0];return source?new THREE.AnimationClip(`${source.name}-in-place`,source.duration,source.tracks.filter(track=>!/Hips\.position$/i.test(track.name))):null;}
+function prepareChibi(model){model.traverse(object=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model).min.y;}
+function getGreetingBones(model){return [['LeftArm',2.05,0],['LeftForeArm',-.85,.18],['LeftHand',0,.72]].flatMap(([name,baseAngle,amplitude])=>{const bone=model.getObjectByName(name);if(!bone)return[];const worldRotation=new THREE.Quaternion();bone.getWorldQuaternion(worldRotation);return[{bone,rest:bone.quaternion.clone(),baseAngle,amplitude,axis:new THREE.Vector3(0,0,1).applyQuaternion(worldRotation.invert()).normalize()}];});}
+function setupHomeMascot(){
+  const mount=app.querySelector('.mascot-canvas');let renderer;
+  try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch{return ()=>{};}
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2.5));renderer.outputColorSpace=THREE.SRGBColorSpace;mount.append(renderer.domElement);
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(30,1,.01,30);camera.position.set(0,.78,3.7);camera.lookAt(0,.78,0);
+  scene.add(new THREE.AmbientLight(0xffffff,2.2));const key=new THREE.DirectionalLight(0xffe5ea,2.4);key.position.set(-2,3,4);scene.add(key);
+  const stage=new THREE.Group();stage.scale.setScalar(1.02);scene.add(stage);
+  const resize=()=>{const width=mount.clientWidth,height=mount.clientHeight;if(!width||!height)return;camera.aspect=width/height;camera.updateProjectionMatrix();renderer.setSize(width,height,false);};
+  const observer=new ResizeObserver(resize);observer.observe(mount);resize();
+  let disposed=false,runner,mixer,waveBones=[];const clock=new THREE.Clock();let elapsed=0;
+  new GLTFLoader().load('/chibi-shaded-rigged.glb',gltf=>{if(disposed)return;prepareChibi(gltf.scene);waveBones=getGreetingBones(gltf.scene);runner=new THREE.Group();runner.add(gltf.scene);stage.add(runner);const clip=createInPlaceRunClip(gltf.animations);if(clip){mixer=new THREE.AnimationMixer(gltf.scene);mixer.clipAction(clip).play();mixer.timeScale=1.2;}},undefined,()=>{if(!disposed)mount.classList.add('load-error');});
+  renderer.setAnimationLoop(()=>{const delta=clock.getDelta();elapsed+=delta;mixer?.update(delta);if(runner){const range=Math.max(.16,(camera.position.z*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect-.52)/stage.scale.x),phase=(elapsed*.32)%2,amount=phase<=1?phase:2-phase,direction=phase<1?1:-1,greeting=phase>0.88&&phase<1.12;runner.position.x=THREE.MathUtils.lerp(-range,range,amount);runner.rotation.y=greeting?0:direction*Math.PI/2;if(greeting){if(mixer)mixer.timeScale=.35;const wave=Math.sin(elapsed*8);for(const item of waveBones){item.bone.quaternion.copy(item.rest).multiply(new THREE.Quaternion().setFromAxisAngle(item.axis,item.baseAngle+wave*item.amplitude));}}else if(mixer)mixer.timeScale=1.2;}renderer.render(scene,camera);});
+  return ()=>{disposed=true;observer.disconnect();renderer.setAnimationLoop(null);mixer?.stopAllAction();scene.traverse(object=>{if(object.isMesh){object.geometry.dispose();for(const material of(Array.isArray(object.material)?object.material:[object.material])){material.map?.dispose();material.dispose();}}});renderer.dispose();};
+}
 function texture(text) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1536;
-  canvas.height = 2304;
+  canvas.width = 2048;
+  canvas.height = 3072;
   const ctx = canvas.getContext('2d');
-  ctx.scale(1.5, 1.5);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.textRendering = 'optimizeLegibility';
+  ctx.fontKerning = 'normal';
+  ctx.scale(2, 2);
   const background = ctx.createLinearGradient(0, 0, 1024, 1536);
   background.addColorStop(0, '#fff8f8');
   background.addColorStop(0.52, '#fff1f4');
   background.addColorStop(1, '#f9e5eb');
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, 1024, 1536);
-  ctx.strokeStyle = 'rgba(192, 116, 136, 0.36)';
-  ctx.lineWidth = 3;
+  const glow = ctx.createRadialGradient(210, 250, 10, 210, 250, 520);
+  glow.addColorStop(0, 'rgba(255,255,255,.72)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, 1024, 1536);
+  const lowerGlow = ctx.createRadialGradient(870, 1320, 10, 870, 1320, 430);
+  lowerGlow.addColorStop(0, 'rgba(233,165,181,.20)'); lowerGlow.addColorStop(1, 'rgba(233,165,181,0)');
+  ctx.fillStyle = lowerGlow; ctx.fillRect(0, 0, 1024, 1536);
+  ctx.strokeStyle = 'rgba(192, 116, 136, 0.42)';
+  ctx.lineWidth = 2;
   ctx.roundRect(42, 42, 940, 1452, 58);
   ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.82)'; ctx.lineWidth = 2;
+  ctx.roundRect(55, 55, 914, 1426, 48); ctx.stroke();
+  ctx.save(); ctx.globalAlpha = .68;
+  ctx.fillStyle = '#d78398'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '500 28px sans-serif';
+  for (const [x,y,glyph,size] of [[108,112,'✦',28],[916,112,'✦',28],[512,290,'·',36],[512,1248,'·',36]]) { ctx.font = `500 ${size}px sans-serif`; ctx.fillText(glyph,x,y); }
+  ctx.restore();
   ctx.fillStyle = '#d28b9b';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -37,13 +72,13 @@ function texture(text) {
   ctx.lineTo(644, 222);
   ctx.stroke();
 
-  ctx.fillStyle = '#744452';
+  ctx.fillStyle = '#482633';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   let size = 94;
   let lines = [];
   do {
-    ctx.font = `600 ${size}px "Be Vietnam Pro", sans-serif`;
+    ctx.font = `700 ${size}px "Be Vietnam Pro", sans-serif`;
     lines = [];
     let line = '';
     for (const word of text.split(' ')) {
@@ -63,21 +98,27 @@ function texture(text) {
   lines.forEach((line, index) => {
     ctx.fillText(line, 512, 790 + (index - (lines.length - 1) / 2) * spacing);
   });
-  ctx.fillStyle = '#d88b9b';
-  ctx.font = '500 42px "Be Vietnam Pro", sans-serif';
-  ctx.fillText('♡', 512, 1370);
+  ctx.fillStyle = '#bd7186';
+  ctx.font = '500 28px "Be Vietnam Pro", sans-serif';
+  ctx.fillText('✦  made with love  ✦', 512, 1402);
   const result = new THREE.CanvasTexture(canvas);
   result.colorSpace = THREE.SRGBColorSpace;
   result.flipY = false;
-  result.anisotropy = 8;
+  result.anisotropy = 16;
+  result.magFilter = THREE.LinearFilter;
+  result.minFilter = THREE.LinearMipmapLinearFilter;
   return result;
 }
-function backTexture(deckName) {
+function backTexture() {
   const canvas = document.createElement('canvas');
-  canvas.width = 1536;
-  canvas.height = 2304;
+  canvas.width = 2048;
+  canvas.height = 3072;
   const ctx = canvas.getContext('2d');
-  ctx.scale(1.5, 1.5);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.textRendering = 'optimizeLegibility';
+  ctx.fontKerning = 'normal';
+  ctx.scale(2, 2);
   const background = ctx.createLinearGradient(0, 0, 1024, 1536);
   background.addColorStop(0, '#fff4f5');
   background.addColorStop(0.5, '#fce9ed');
@@ -85,51 +126,23 @@ function backTexture(deckName) {
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, 1024, 1536);
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
-  ctx.beginPath();
-  ctx.ellipse(180, 170, 420, 270, -0.18, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(231, 157, 174, 0.16)';
-  ctx.beginPath();
-  ctx.ellipse(880, 1400, 390, 260, -0.18, 0, Math.PI * 2);
-  ctx.fill();
+  let result;
+  const drawArtwork = () => {
+    if (!backArtwork.naturalWidth) return;
+    ctx.clearRect(0, 0, 1024, 1536);
+    // Keep the reference card frame intact; the blank bubble is already removed from this artwork.
+    ctx.drawImage(backArtwork, 0, 0, 1024, 1536);
+    if (result) result.needsUpdate = true;
+  };
+  if (backArtwork.complete && backArtwork.naturalWidth) drawArtwork();
+  else backArtwork.addEventListener('load', drawArtwork, { once: true });
 
-  ctx.strokeStyle = 'rgba(164, 95, 115, 0.34)';
-  ctx.lineWidth = 3;
-  ctx.roundRect(42, 42, 940, 1452, 58);
-  ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#a26073';
-  ctx.font = '600 34px "Be Vietnam Pro", sans-serif';
-  ctx.letterSpacing = '8px';
-  ctx.fillText('LOVE  CARDS', 512, 555);
-  ctx.letterSpacing = '0px';
-
-  ctx.strokeStyle = 'rgba(188, 116, 136, 0.48)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(360, 615);
-  ctx.lineTo(664, 615);
-  ctx.stroke();
-  ctx.fillStyle = '#d47f94';
-  ctx.font = '500 54px "Be Vietnam Pro", sans-serif';
-  ctx.fillText('♡', 512, 680);
-
-  ctx.fillStyle = '#754654';
-  ctx.font = '600 76px "Be Vietnam Pro", sans-serif';
-  ctx.fillText(deckName, 512, 810, 820);
-  ctx.fillStyle = 'rgba(156, 94, 112, 0.76)';
-  ctx.font = '500 28px "Be Vietnam Pro", sans-serif';
-  ctx.fillText('MỘT CHÚT THỜI GIAN, NHIỀU ĐIỀU ĐỂ HIỂU NHAU', 512, 900, 800);
-  ctx.fillStyle = '#d47f94';
-  ctx.font = '500 42px "Be Vietnam Pro", sans-serif';
-  ctx.fillText('♡', 512, 1370);
-
-  const result = new THREE.CanvasTexture(canvas);
+  result = new THREE.CanvasTexture(canvas);
   result.colorSpace = THREE.SRGBColorSpace;
   result.flipY = false;
-  result.anisotropy = 8;
+  result.anisotropy = 16;
+  result.magFilter = THREE.LinearFilter;
+  result.minFilter = THREE.LinearMipmapLinearFilter;
   return result;
 }
 function play(deck) {
@@ -143,22 +156,30 @@ function play(deck) {
   if (!isValid) state = { order: shuffle(deck.questions.length), index: 0 };
   saved[deck.id] = state;
   persist();
+  let favorites={};try{favorites=JSON.parse(localStorage.getItem(favoritesKey)||'{}');}catch{favorites={};}
 
-  shell(`<main class="play"><section class="play-info"><button class="back">← Các bộ bài</button><p class="eyebrow">${deck.description}</p><h1>${deck.name}</h1><p>Vuốt trái để xem câu tiếp · Vuốt phải để quay lại câu trước.</p><div class="progress"></div><div class="track"><div></div></div><p class="notice" aria-live="polite"></p></section><section class="canvas-wrap"><div class="canvas"></div><p class="hint">Vuốt trái: câu tiếp theo · Vuốt phải: câu trước</p><div class="actions"><button class="previous">← Câu trước</button><button class="reveal">Mở thẻ</button><button class="next">Câu tiếp →</button></div><button class="close" aria-label="Đóng thẻ">Đóng ×</button></section></main><div class="screen-dim" aria-hidden="true"></div>`);
+  shell(`<main class="play"><section class="play-info"><button class="back">← Các bộ bài</button><p class="eyebrow">${deck.description}</p><h1>${deck.name}</h1><p>Vuốt trái để xem câu tiếp · Vuốt phải để quay lại câu trước.</p><div class="progress"></div><div class="track"><div></div></div><p class="notice" aria-live="polite"></p></section><section class="canvas-wrap"><div class="canvas"><div class="card-pet-layer" aria-hidden="true"></div><div class="card-hud"><div class="focused-progress"><span class="focused-progress-label"></span><div class="focused-progress-track" role="progressbar" aria-label="Tiến độ bộ thẻ" aria-valuemin="1" aria-valuemax="${deck.questions.length}" aria-valuenow="1"><div></div></div></div></div><button class="card-favorite" type="button" aria-label="Đánh dấu thẻ yêu thích" aria-pressed="false"><span aria-hidden="true">♡</span></button></div><p class="hint">Vuốt trái: câu tiếp theo · Vuốt phải: câu trước</p><div class="actions"><button class="previous">← Câu trước</button><button class="reveal">Mở thẻ</button><button class="next">Câu tiếp →</button></div><button class="close" aria-label="Đóng thẻ">Đóng ×</button></section></main><div class="screen-dim" aria-hidden="true"></div>`);
   app.querySelector('.back').onclick = home;
   const mount = app.querySelector('.canvas');
-  let renderer;
-  try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+  const petMount=mount.querySelector('.card-pet-layer');
+  let renderer,petRenderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); petRenderer = new THREE.WebGLRenderer({antialias:true,alpha:true}); }
   catch { app.querySelector('.notice').textContent = 'Trình duyệt không hỗ trợ hiển thị 3D.'; return; }
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2.5));
+  petRenderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  petRenderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.setAttribute('aria-label', 'Thẻ câu hỏi 3D. Nhấn Enter để mở thẻ và dùng phím mũi tên để chuyển câu.');
   renderer.domElement.tabIndex = 0;
   mount.append(renderer.domElement);
+  petMount.append(petRenderer.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, .001, 10);
   camera.position.set(0, 0, .23);
+  const petScene=new THREE.Scene();petScene.add(new THREE.AmbientLight(0xffffff,2.2));const petKey=new THREE.DirectionalLight(0xffe5ea,2.4);petKey.position.set(-2,3,4);petScene.add(petKey);
+  const petCamera=new THREE.OrthographicCamera(-.4,.4,.4,-.4,.01,20);petCamera.position.set(0,.4,4);petCamera.lookAt(0,.4,0);
+  let petRunner,petMixer,petWaveBones=[];
   scene.add(new THREE.AmbientLight(0xffffff, 2));
   for (const side of [1, -1]) {
     const light = new THREE.DirectionalLight(0xffffff, 1);
@@ -194,14 +215,37 @@ function play(deck) {
     }
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
+    petCamera.left=-width/height*.4;petCamera.right=width/height*.4;petCamera.updateProjectionMatrix();petRenderer.setSize(width,height,false);
   };
   const observer = new ResizeObserver(resize);
   observer.observe(mount);
   resize();
+  const petStart=performance.now();let petElapsed=0,lastPetFrame=petStart;
+  new GLTFLoader().load('/chibi-shaded-rigged.glb',gltf=>{
+    if(disposed)return;
+    prepareChibi(gltf.scene);
+    petRunner=new THREE.Group();petRunner.scale.setScalar(.05);petRunner.add(gltf.scene);petScene.add(petRunner);
+    const runClip=createInPlaceRunClip(gltf.animations);if(runClip){petMixer=new THREE.AnimationMixer(gltf.scene);petMixer.clipAction(runClip).play();petMixer.timeScale=1.25;}
+    petWaveBones=getGreetingBones(gltf.scene);
+  },undefined,()=>{});
 
   function update() {
     app.querySelector('.progress').textContent = `Thẻ ${state.index + 1} / ${deck.questions.length}`;
     app.querySelector('.track div').style.width = `${(state.index + 1) / deck.questions.length * 100}%`;
+    const currentQuestion = state.order[state.index];
+    const favorite = (favorites[deck.id] || []).includes(currentQuestion);
+    const favoriteButton = app.querySelector('.card-favorite');
+    favoriteButton?.setAttribute('aria-pressed', String(favorite));
+    favoriteButton?.setAttribute('aria-label', favorite ? 'Bỏ thẻ khỏi yêu thích' : 'Đánh dấu thẻ yêu thích');
+    if (favoriteButton) favoriteButton.querySelector('span').textContent = '♥';
+    const label = app.querySelector('.focused-progress-label');
+    if (label) label.textContent = `Thẻ ${state.index + 1} / ${deck.questions.length}`;
+    const focusedTrack = app.querySelector('.focused-progress-track');
+    if (focusedTrack) {
+      focusedTrack.setAttribute('aria-valuemax', String(deck.questions.length));
+      focusedTrack.setAttribute('aria-valuenow', String(state.index + 1));
+      focusedTrack.querySelector('div').style.width = `${(state.index + 1) / deck.questions.length * 100}%`;
+    }
     if (front && fontReady) {
       const nextTexture = texture(deck.questions[state.order[state.index]]);
       front.map = nextTexture;
@@ -209,7 +253,7 @@ function play(deck) {
       activeTexture?.dispose();
       activeTexture = nextTexture;
       if (back && !activeBackTexture) {
-        activeBackTexture = backTexture(deck.name);
+        activeBackTexture = backTexture();
         stack.traverse(object => {
           if (object.isMesh && object.material.name === 'BackTitle') {
             object.material.map = activeBackTexture;
@@ -224,7 +268,6 @@ function play(deck) {
     stack.updateMatrixWorld(true);
     scene.attach(card);
     card.rotation.set(0, 0, 0);
-    stack.visible = false;
     startPosition.copy(card.position);
     focused = true;
     wrapper.classList.add('is-focused');
@@ -256,6 +299,13 @@ function play(deck) {
     app.querySelector('.reveal').disabled = false;
   }
   app.querySelector('.reveal').onclick = revealCard;
+  app.querySelector('.card-favorite').onclick = () => {
+    const current = new Set(favorites[deck.id] || []), questionIndex = state.order[state.index];
+    if (current.has(questionIndex)) current.delete(questionIndex); else current.add(questionIndex);
+    favorites[deck.id] = [...current];
+    try { localStorage.setItem(favoritesKey, JSON.stringify(favorites)); } catch {}
+    update();
+  };
   app.querySelector('.previous').onclick = () => moveQuestion(-1);
   app.querySelector('.next').onclick = () => moveQuestion(1);
   app.querySelector('.close').onclick = closeFocused;
@@ -278,7 +328,7 @@ function play(deck) {
     for (let i = 8; i >= 1; i--) {
       const underneath = model.clone();
       underneath.rotation.set(0, Math.PI, 0.006 * (i % 3 - 1));
-      underneath.position.set(-i * 0.00035, -i * 0.00045, 0.006 - i * 0.00075);
+      underneath.position.set(-i * 0.00015, i * 0.00055, 0.006 - i * 0.0003);
       stack.add(underneath);
     }
     model.traverse(object => {
@@ -293,7 +343,7 @@ function play(deck) {
     card.rotation.y = Math.PI;
     card.position.z = 0.006;
     stack.add(card);
-    document.fonts.load('600 94px "Be Vietnam Pro"', 'Hôm nay điều gì khiến bạn mỉm cười?').catch(() => {}).then(() => {
+    document.fonts.load('700 94px "Be Vietnam Pro"', 'Hôm nay điều gì khiến bạn mỉm cười?').catch(() => {}).then(() => {
       if (disposed) return;
       fontReady = true;
       update();
@@ -332,6 +382,7 @@ function play(deck) {
     }
   });
   renderer.setAnimationLoop(() => {
+    const now=performance.now(),petDelta=Math.min((now-lastPetFrame)/1000,.1);lastPetFrame=now;petElapsed=(now-petStart)/1000;petMixer?.update(petDelta);
     if (card) {
       if (lift) {
         const t = Math.min((performance.now() - lift.start) / lift.duration, 1);
@@ -373,12 +424,50 @@ function play(deck) {
         card.rotation.z *= .8;
       }
     }
+    if(petRunner){
+      if(focused){
+        const modelHeight=1.623*.03,halfHeight=modelHeight/2,moveDuration=1.35,greetDuration=.85,range=Math.min(.15,petCamera.right*.38),laneY=.4-.255-modelHeight-.01;
+        const segments=[
+          {from:-range,to:0,duration:moveDuration,direction:1},
+          {greet:true,duration:greetDuration},
+          {from:0,to:range,duration:moveDuration,direction:1},
+          {from:range,to:0,duration:moveDuration,direction:-1},
+          {greet:true,duration:greetDuration},
+          {from:0,to:-range,duration:moveDuration,direction:-1}
+        ];
+        const cycle=segments.reduce((sum,segment)=>sum+segment.duration,0);
+        let phase=petElapsed%cycle,segment=segments[0];
+        for(const item of segments){if(phase<item.duration){segment=item;break;}phase-=item.duration;}
+        petRunner.scale.setScalar(.03);
+        const ease=t=>(1-Math.cos(Math.PI*t))*.5;
+        const t=phase/segment.duration,greeting=Boolean(segment.greet),x=greeting?0:THREE.MathUtils.lerp(segment.from,segment.to,ease(t));
+        petRunner.position.set(x,laneY,0);
+        const edge=THREE.MathUtils.clamp(Math.min(t/.2,(1-t)/.2),0,1),turnBlend=edge*edge*(3-2*edge);
+        petRunner.rotation.y=greeting?0:segment.direction*Math.PI/2*turnBlend;
+        if(petMixer)petMixer.timeScale=greeting ? .2 : .3+.85*turnBlend;
+        if(greeting){const greetBlend=Math.sin(Math.PI*t),wave=Math.sin(petElapsed*7);for(const item of petWaveBones){const angle=item.baseAngle+wave*item.amplitude,target=item.rest.clone().multiply(new THREE.Quaternion().setFromAxisAngle(item.axis,angle));item.bone.quaternion.slerp(target,greetBlend);}}
+      }else{
+        const moveDuration=2,greetDuration=.9,cycle=moveDuration*4+greetDuration*2,phase=petElapsed%cycle,range=Math.max(.1,petCamera.right*.6);
+        let x=0,direction=1,greeting=false;
+        if(phase<moveDuration){x=-range+range*phase/moveDuration;}
+        else if(phase<moveDuration+greetDuration){greeting=true;}
+        else if(phase<moveDuration*2+greetDuration){x=range*(phase-moveDuration-greetDuration)/moveDuration;}
+        else if(phase<moveDuration*3+greetDuration){direction=-1;x=range*(1-(phase-moveDuration*2-greetDuration)/moveDuration);}
+        else if(phase<moveDuration*3+greetDuration*2){direction=-1;greeting=true;}
+        else{x=-range*(phase-moveDuration*3-greetDuration*2)/moveDuration;}
+        petRunner.scale.setScalar(.05);petRunner.position.set(x,.42,0);petRunner.rotation.y=greeting?0:direction*Math.PI/2;
+        if(petMixer)petMixer.timeScale=greeting ? 0.35 : 1.25;
+        if(greeting){const wave=Math.sin(petElapsed*8);for(const item of petWaveBones){const angle=item.baseAngle+wave*item.amplitude;item.bone.quaternion.copy(item.rest).multiply(new THREE.Quaternion().setFromAxisAngle(item.axis,angle));}}
+      }
+    }
     renderer.render(scene, camera);
+    petRenderer.render(petScene,petCamera);
   });
   cleanup = () => {
     disposed = true;
     observer.disconnect();
     renderer.setAnimationLoop(null);
+    petMixer?.stopAllAction();
     const geometries = new Set(), materials = new Set();
     stack.traverse(object => {
       if (object.isMesh) { geometries.add(object.geometry); materials.add(object.material); }
@@ -386,6 +475,7 @@ function play(deck) {
     if (card && card.parent === scene) card.traverse(object => {
       if (object.isMesh) { geometries.add(object.geometry); materials.add(object.material); }
     });
+    petScene.traverse(object=>{if(object.isMesh){geometries.add(object.geometry);for(const material of(Array.isArray(object.material)?object.material:[object.material]))materials.add(material);}});
     geometries.forEach(geometry => geometry.dispose());
     materials.forEach(material => { material.map?.dispose(); material.dispose(); });
     originalTexture?.dispose();
@@ -393,6 +483,7 @@ function play(deck) {
     activeTexture?.dispose();
     activeBackTexture?.dispose();
     renderer.dispose();
+    petRenderer.dispose();
     cleanup = () => {};
   };
 }
