@@ -82,7 +82,7 @@ function play(deck) {
   saved[deck.id] = state;
   persist();
 
-  shell(`<main class="play"><section class="play-info"><button class="back">← Các bộ bài</button><p class="eyebrow">${deck.description}</p><h1>${deck.name}</h1><p>Vuốt phải để xem câu tiếp · Vuốt trái để quay lại câu trước.</p><div class="progress"></div><div class="track"><div></div></div><p class="notice" aria-live="polite"></p></section><section class="canvas-wrap"><div class="canvas"></div><p class="hint">Vuốt phải: câu tiếp theo · Vuốt trái: câu trước</p><div class="actions"><button class="previous">← Câu trước</button><button class="reveal">Mở thẻ</button><button class="next">Câu tiếp →</button></div><button class="close" aria-label="Đóng thẻ">Đóng ×</button></section></main><div class="screen-dim" aria-hidden="true"></div>`);
+  shell(`<main class="play"><section class="play-info"><button class="back">← Các bộ bài</button><p class="eyebrow">${deck.description}</p><h1>${deck.name}</h1><p>Vuốt trái để xem câu tiếp · Vuốt phải để quay lại câu trước.</p><div class="progress"></div><div class="track"><div></div></div><p class="notice" aria-live="polite"></p></section><section class="canvas-wrap"><div class="canvas"></div><p class="hint">Vuốt trái: câu tiếp theo · Vuốt phải: câu trước</p><div class="actions"><button class="previous">← Câu trước</button><button class="reveal">Mở thẻ</button><button class="next">Câu tiếp →</button></div><button class="close" aria-label="Đóng thẻ">Đóng ×</button></section></main><div class="screen-dim" aria-hidden="true"></div>`);
   app.querySelector('.back').onclick = home;
   const mount = app.querySelector('.canvas');
   let renderer;
@@ -170,7 +170,8 @@ function play(deck) {
       return;
     }
     app.querySelector('.notice').textContent = '';
-    navigation = { direction, exitX: direction * 0.18, enterX: direction > 0 ? 0.18 : -0.18, phase: 'out', start: performance.now(), fromX: card.position.x, fromZ: card.rotation.z };
+    const swipeDirection = -direction;
+    navigation = { direction, swipeDirection, exitX: swipeDirection * 0.2, enterX: -swipeDirection * 0.2, phase: 'out', start: performance.now(), fromX: card.position.x, fromZ: card.rotation.z, fromY: card.position.y };
   }
   function closeFocused() {
     if (!card || !focused || navigation || lift) return;
@@ -245,7 +246,7 @@ function play(deck) {
     const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
     pointer = null;
     if (event.type === 'pointercancel') return;
-    if (focused && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) moveQuestion(Math.sign(dx));
+    if (focused && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) moveQuestion(dx < 0 ? 1 : -1);
     else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) revealCard();
   }
   canvas.addEventListener('pointerup', endPointer);
@@ -266,22 +267,25 @@ function play(deck) {
         card.position.z += Math.sin(Math.PI * t) * 0.008;
         if (t === 1) lift = null;
       } else if (navigation) {
-        const t = Math.min((performance.now() - navigation.start) / 180, 1);
-        const eased = 1 - (1 - t) ** 3;
+        const t = Math.min((performance.now() - navigation.start) / (navigation.phase === 'out' ? 190 : 260), 1);
+        const eased = t * t * (3 - 2 * t);
         if (navigation.phase === 'out') {
           card.position.x = navigation.fromX + (navigation.exitX - navigation.fromX) * eased;
-          card.rotation.z = navigation.fromZ + (-navigation.direction * 0.08 - navigation.fromZ) * eased;
+          card.position.y = navigation.fromY + 0.012 * Math.sin(Math.PI * eased);
+          card.rotation.z = navigation.fromZ + (navigation.swipeDirection * 0.1 - navigation.fromZ) * eased;
           if (t === 1) {
             state.index += navigation.direction;
             persist();
             update();
             card.position.x = navigation.enterX;
-            card.rotation.z = navigation.direction * 0.08;
+            card.position.y = 0;
+            card.rotation.z = -navigation.swipeDirection * 0.1;
             navigation = { ...navigation, phase: 'in', start: performance.now() };
           }
         } else if (navigation.phase === 'in') {
           card.position.x = navigation.enterX * (1 - eased);
-          card.rotation.z = navigation.direction * 0.08 * (1 - eased);
+          card.position.y = 0.012 * Math.sin(Math.PI * eased);
+          card.rotation.z = -navigation.swipeDirection * 0.1 * (1 - eased);
           if (t === 1) {
             card.position.set(0, 0, focusedPosition.z);
             navigation = null;
