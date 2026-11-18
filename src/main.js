@@ -170,7 +170,7 @@ function play(deck) {
       return;
     }
     app.querySelector('.notice').textContent = '';
-    navigation = { direction, phase: 'out', start: performance.now(), fromX: card.position.x, fromZ: card.rotation.z };
+    navigation = { direction, exitX: direction * 0.18, enterX: direction > 0 ? -0.18 : 0.18, phase: 'out', start: performance.now(), fromX: card.position.x, fromZ: card.rotation.z };
   }
   function closeFocused() {
     if (!card || !focused || navigation || lift) return;
@@ -269,18 +269,18 @@ function play(deck) {
         const t = Math.min((performance.now() - navigation.start) / 180, 1);
         const eased = 1 - (1 - t) ** 3;
         if (navigation.phase === 'out') {
-          card.position.x = navigation.fromX + (navigation.direction * 0.18 - navigation.fromX) * eased;
+          card.position.x = navigation.fromX + (navigation.exitX - navigation.fromX) * eased;
           card.rotation.z = navigation.fromZ + (-navigation.direction * 0.08 - navigation.fromZ) * eased;
           if (t === 1) {
             state.index += navigation.direction;
             persist();
             update();
-            card.position.x = -navigation.direction * 0.18;
+            card.position.x = navigation.enterX;
             card.rotation.z = navigation.direction * 0.08;
             navigation = { ...navigation, phase: 'in', start: performance.now() };
           }
         } else if (navigation.phase === 'in') {
-          card.position.x = -navigation.direction * 0.18 * (1 - eased);
+          card.position.x = navigation.enterX * (1 - eased);
           card.rotation.z = navigation.direction * 0.08 * (1 - eased);
           if (t === 1) {
             card.position.set(0, 0, focusedPosition.z);
