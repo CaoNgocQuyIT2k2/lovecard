@@ -11,23 +11,24 @@ function shell(content){app.innerHTML=`<div class="shell"><header><div class="br
 function home(){cleanup();shell(`<main class="home"><div class="intro"><span class="eyebrow">Dành thời gian cho nhau</span><h1>Mỗi câu hỏi,<br><em>một câu chuyện.</em></h1><p>Mở lòng qua những câu chuyện nhỏ và khám phá thêm về người bạn yêu thương.</p></div><h2 class="section-title">Chọn bộ bài của bạn</h2><div class="decks">${decks.map((d,i)=>`<button class="deck" data-deck="${d.id}"><span class="icon">${['♡','✿','∞'][i]}</span><h2>${d.name}</h2><p>${d.description}<span class="count">${d.questions.length} thẻ →</span></p></button>`).join('')}</div></main>`);app.querySelectorAll('[data-deck]').forEach(b=>b.onclick=()=>play(decks.find(d=>d.id===b.dataset.deck)));}
 function texture(text) {
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1536;
+  canvas.width = 1536;
+  canvas.height = 2304;
   const ctx = canvas.getContext('2d');
+  ctx.scale(1.5, 1.5);
   const background = ctx.createLinearGradient(0, 0, 1024, 1536);
-  background.addColorStop(0, '#fffdfc');
-  background.addColorStop(0.52, '#fff7f7');
-  background.addColorStop(1, '#fcebed');
+  background.addColorStop(0, '#fff8f8');
+  background.addColorStop(0.52, '#fff1f4');
+  background.addColorStop(1, '#f9e5eb');
   ctx.fillStyle = background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = 'rgba(192, 116, 136, 0.28)';
+  ctx.fillRect(0, 0, 1024, 1536);
+  ctx.strokeStyle = 'rgba(192, 116, 136, 0.36)';
   ctx.lineWidth = 3;
   ctx.roundRect(42, 42, 940, 1452, 58);
   ctx.stroke();
   ctx.fillStyle = '#d28b9b';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '500 38px "Mali", cursive';
+  ctx.font = '500 34px "Be Vietnam Pro", sans-serif';
   ctx.fillText('love cards', 512, 170);
   ctx.strokeStyle = 'rgba(210, 139, 155, 0.45)';
   ctx.lineWidth = 2;
@@ -36,13 +37,13 @@ function texture(text) {
   ctx.lineTo(644, 222);
   ctx.stroke();
 
-  ctx.fillStyle = '#88505f';
+  ctx.fillStyle = '#744452';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   let size = 94;
   let lines = [];
   do {
-    ctx.font = `600 ${size}px "Mali", cursive`;
+    ctx.font = `600 ${size}px "Be Vietnam Pro", sans-serif`;
     lines = [];
     let line = '';
     for (const word of text.split(' ')) {
@@ -63,11 +64,72 @@ function texture(text) {
     ctx.fillText(line, 512, 790 + (index - (lines.length - 1) / 2) * spacing);
   });
   ctx.fillStyle = '#d88b9b';
-  ctx.font = '500 42px "Mali", cursive';
+  ctx.font = '500 42px "Be Vietnam Pro", sans-serif';
   ctx.fillText('♡', 512, 1370);
   const result = new THREE.CanvasTexture(canvas);
   result.colorSpace = THREE.SRGBColorSpace;
   result.flipY = false;
+  result.anisotropy = 8;
+  return result;
+}
+function backTexture(deckName) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1536;
+  canvas.height = 2304;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(1.5, 1.5);
+  const background = ctx.createLinearGradient(0, 0, 1024, 1536);
+  background.addColorStop(0, '#fff4f5');
+  background.addColorStop(0.5, '#fce9ed');
+  background.addColorStop(1, '#f8dfe6');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, 1024, 1536);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
+  ctx.beginPath();
+  ctx.ellipse(180, 170, 420, 270, -0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(231, 157, 174, 0.16)';
+  ctx.beginPath();
+  ctx.ellipse(880, 1400, 390, 260, -0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(164, 95, 115, 0.34)';
+  ctx.lineWidth = 3;
+  ctx.roundRect(42, 42, 940, 1452, 58);
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#a26073';
+  ctx.font = '600 34px "Be Vietnam Pro", sans-serif';
+  ctx.letterSpacing = '8px';
+  ctx.fillText('LOVE  CARDS', 512, 555);
+  ctx.letterSpacing = '0px';
+
+  ctx.strokeStyle = 'rgba(188, 116, 136, 0.48)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(360, 615);
+  ctx.lineTo(664, 615);
+  ctx.stroke();
+  ctx.fillStyle = '#d47f94';
+  ctx.font = '500 54px "Be Vietnam Pro", sans-serif';
+  ctx.fillText('♡', 512, 680);
+
+  ctx.fillStyle = '#754654';
+  ctx.font = '600 76px "Be Vietnam Pro", sans-serif';
+  ctx.fillText(deckName, 512, 810, 820);
+  ctx.fillStyle = 'rgba(156, 94, 112, 0.76)';
+  ctx.font = '500 28px "Be Vietnam Pro", sans-serif';
+  ctx.fillText('MỘT CHÚT THỜI GIAN, NHIỀU ĐIỀU ĐỂ HIỂU NHAU', 512, 900, 800);
+  ctx.fillStyle = '#d47f94';
+  ctx.font = '500 42px "Be Vietnam Pro", sans-serif';
+  ctx.fillText('♡', 512, 1370);
+
+  const result = new THREE.CanvasTexture(canvas);
+  result.colorSpace = THREE.SRGBColorSpace;
+  result.flipY = false;
+  result.anisotropy = 8;
   return result;
 }
 function play(deck) {
@@ -107,7 +169,7 @@ function play(deck) {
   stack.rotation.set(0, 0, 0);
   stack.position.set(0, 0, 0);
   scene.add(stack);
-  let card, front, fontReady = false, originalTexture, activeTexture;
+  let card, front, back, fontReady = false, originalTexture, originalBackTexture, activeTexture, activeBackTexture;
   let disposed = false, pointer = null, navigation = null, lift = null, focused = false;
   const startPosition = new THREE.Vector3();
   const focusedPosition = new THREE.Vector3(0, 0, 0.015);
@@ -146,6 +208,15 @@ function play(deck) {
       front.needsUpdate = true;
       activeTexture?.dispose();
       activeTexture = nextTexture;
+      if (back && !activeBackTexture) {
+        activeBackTexture = backTexture(deck.name);
+        stack.traverse(object => {
+          if (object.isMesh && object.material.name === 'BackTitle') {
+            object.material.map = activeBackTexture;
+            object.material.needsUpdate = true;
+          }
+        });
+      }
     }
   }
   function revealCard() {
@@ -198,7 +269,9 @@ function play(deck) {
       if (object.isMesh && object.material.name === 'FrontQuestion') {
         front = object.material;
         originalTexture = front.map;
-
+      } else if (object.isMesh && object.material.name === 'BackTitle') {
+        back = object.material;
+        originalBackTexture = back.map;
       }
     });
     // The cards under the top card share their geometry and artwork.
@@ -220,7 +293,7 @@ function play(deck) {
     card.rotation.y = Math.PI;
     card.position.z = 0.006;
     stack.add(card);
-    document.fonts.load('600 94px "Mali"', 'Hôm nay điều gì khiến bạn mỉm cười?').catch(() => {}).then(() => {
+    document.fonts.load('600 94px "Be Vietnam Pro"', 'Hôm nay điều gì khiến bạn mỉm cười?').catch(() => {}).then(() => {
       if (disposed) return;
       fontReady = true;
       update();
@@ -316,6 +389,9 @@ function play(deck) {
     geometries.forEach(geometry => geometry.dispose());
     materials.forEach(material => { material.map?.dispose(); material.dispose(); });
     originalTexture?.dispose();
+    originalBackTexture?.dispose();
+    activeTexture?.dispose();
+    activeBackTexture?.dispose();
     renderer.dispose();
     cleanup = () => {};
   };
