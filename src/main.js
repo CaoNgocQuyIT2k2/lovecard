@@ -7,9 +7,15 @@ const backArtwork=new Image();backArtwork.src='/conversation-card-back.png';
 let saved={}; try {saved=JSON.parse(localStorage.getItem(storageKey)||'{}');} catch {saved={};}
 let cleanup=()=>{};
 function persist(){try{localStorage.setItem(storageKey,JSON.stringify(saved));}catch{}}
+function readFavorites(){let value={};try{value=JSON.parse(localStorage.getItem(favoritesKey)||'{}')||{};}catch{}return Object.fromEntries(decks.map(deck=>[deck.id,[...new Set((Array.isArray(value[deck.id])?value[deck.id]:[]).filter(index=>Number.isInteger(index)&&index>=0&&index<deck.questions.length))]]));}
+function savedCards(deckFilter=null){const favorites=readFavorites();return decks.filter(deck=>!deckFilter||deck.id===deckFilter.id).flatMap(deck=>[...new Set(favorites[deck.id]||[])].filter(index=>Number.isInteger(index)&&index>=0&&index<deck.questions.length).map(questionIndex=>({deck,questionIndex,question:deck.questions[questionIndex]})));}
+function escapeHTML(value){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
+function savedCardMarkup(item){return `<button class="saved-card" type="button" data-saved-deck="${item.deck.id}" data-saved-question="${item.questionIndex}"><span class="saved-card-meta"><span>${escapeHTML(item.deck.name)}</span><span>♥ Đã lưu</span></span><span class="saved-card-question">${escapeHTML(item.question)}</span><span class="saved-card-open">Mở thẻ →</span></button>`;}
+function bindSavedCards(){app.querySelectorAll('[data-saved-deck]').forEach(button=>button.onclick=()=>{const deck=decks.find(item=>item.id===button.dataset.savedDeck);if(deck)play(deck,Number(button.dataset.savedQuestion),true);});}
 function shuffle(n){const a=Array.from({length:n},(_,i)=>i);for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function shell(content){app.innerHTML=`<div class="shell"><header><div class="brand"><span>♡</span> Love Cards</div><small>Một chút thời gian, nhiều điều để hiểu nhau</small></header>${content}</div>`;}
-function home(){cleanup();shell(`<main class="home"><div class="home-hero"><div class="intro"><span class="eyebrow">Dành thời gian cho nhau</span><h1>Mỗi câu hỏi,<br><em>một câu chuyện.</em></h1><p>Mở lòng qua những câu chuyện nhỏ và khám phá thêm về người bạn yêu thương.</p></div><div class="mascot-canvas" aria-hidden="true"></div></div><h2 class="section-title">Chọn bộ bài của bạn</h2><div class="decks">${decks.map((d,i)=>`<button class="deck" data-deck="${d.id}"><span class="icon">${['♡','✿','∞'][i]}</span><h2>${d.name}</h2><p>${d.description}<span class="count">${d.questions.length} thẻ →</span></p></button>`).join('')}</div></main>`);cleanup=setupHomeMascot();app.querySelectorAll('[data-deck]').forEach(b=>b.onclick=()=>play(decks.find(d=>d.id===b.dataset.deck)));}
+function home(){cleanup();const items=savedCards();shell(`<main class="home"><div class="home-hero"><div class="intro"><span class="eyebrow">Dành thời gian cho nhau</span><h1>Mỗi câu hỏi,<br><em>một câu chuyện.</em></h1><p>Mở lòng qua những câu chuyện nhỏ và khám phá thêm về người bạn yêu thương.</p></div><div class="mascot-canvas" aria-hidden="true"></div></div><h2 class="section-title">Chọn bộ bài của bạn</h2><div class="decks">${decks.map((d,i)=>`<button class="deck" data-deck="${d.id}"><span class="icon">${['♡','✿','∞'][i]}</span><h2>${d.name}</h2><p>${d.description}<span class="count">${d.questions.length} thẻ →</span></p></button>`).join('')}</div><section class="saved-section"><div class="saved-section-heading"><div><span class="eyebrow">Của riêng hai bạn</span><h2>Thẻ đã lưu <span>${items.length}</span></h2></div><small>Chỉ lưu trên thiết bị này</small></div>${items.length?`<div class="saved-grid saved-grid-home">${items.map(savedCardMarkup).join('')}</div>`:'<div class="saved-empty"><span>♡</span><strong>Chưa có thẻ yêu thích</strong><p>Chạm vào biểu tượng tim khi mở thẻ để lưu câu hỏi ở đây.</p></div>'}</section></main>`);cleanup=setupHomeMascot();app.querySelectorAll('[data-deck]').forEach(b=>b.onclick=()=>play(decks.find(d=>d.id===b.dataset.deck)));bindSavedCards();}
+function showSavedCards(deckFilter=null,returnTo=home){cleanup();const items=savedCards(deckFilter);shell(`<main class="saved-page"><button class="back saved-back">← ${deckFilter?'Quay lại bộ bài':'Trang chính'}</button><p class="eyebrow">${deckFilter?escapeHTML(deckFilter.name):'Bộ sưu tập của hai bạn'}</p><h1>Thẻ đã lưu${deckFilter?` · ${escapeHTML(deckFilter.name)}`:''}</h1><p class="saved-page-intro">${items.length?`${items.length} câu hỏi được lưu trên thiết bị này.`:'Những thẻ bạn lưu trong bộ bài này sẽ xuất hiện tại đây.'}</p>${items.length?`<div class="saved-grid saved-grid-page">${items.map(savedCardMarkup).join('')}</div>`:'<div class="saved-empty"><span>♡</span><strong>Chưa có thẻ nào được lưu</strong><p>Mở một câu hỏi trong bộ bài này rồi chạm vào tim để thêm thẻ yêu thích.</p></div>'}</main>`);app.querySelector('.saved-back').onclick=returnTo;bindSavedCards();}
 function createInPlaceRunClip(animations){const source=animations[0];return source?new THREE.AnimationClip(`${source.name}-in-place`,source.duration,source.tracks.filter(track=>!/Hips\.position$/i.test(track.name))):null;}
 function prepareChibi(model){model.traverse(object=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});model.updateMatrixWorld(true);model.position.y-=new THREE.Box3().setFromObject(model).min.y;}
 function getGreetingBones(model){return [['LeftArm',2.05,0],['LeftForeArm',-.85,.18],['LeftHand',0,.72]].flatMap(([name,baseAngle,amplitude])=>{const bone=model.getObjectByName(name);if(!bone)return[];const worldRotation=new THREE.Quaternion();bone.getWorldQuaternion(worldRotation);return[{bone,rest:bone.quaternion.clone(),baseAngle,amplitude,axis:new THREE.Vector3(0,0,1).applyQuaternion(worldRotation.invert()).normalize()}];});}
@@ -145,7 +151,7 @@ function backTexture() {
   result.minFilter = THREE.LinearMipmapLinearFilter;
   return result;
 }
-function play(deck) {
+function play(deck, questionIndex=null, openSavedCard=false) {
   cleanup();
   let state = saved[deck.id];
   const isValid = state && Array.isArray(state.order)
@@ -154,11 +160,12 @@ function play(deck) {
     && state.order.every(index => Number.isInteger(index) && index >= 0 && index < deck.questions.length)
     && Number.isInteger(state.index) && state.index >= 0 && state.index < deck.questions.length;
   if (!isValid) state = { order: shuffle(deck.questions.length), index: 0 };
+  if(Number.isInteger(questionIndex)&&questionIndex>=0&&questionIndex<deck.questions.length){state.index=Math.max(0,state.order.indexOf(questionIndex));}
   saved[deck.id] = state;
   persist();
-  let favorites={};try{favorites=JSON.parse(localStorage.getItem(favoritesKey)||'{}');}catch{favorites={};}
+  const favorites=readFavorites();
 
-  shell(`<main class="play"><section class="play-info"><button class="back">← Các bộ bài</button><p class="eyebrow">${deck.description}</p><h1>${deck.name}</h1><p>Vuốt trái để xem câu tiếp · Vuốt phải để quay lại câu trước.</p><div class="progress"></div><div class="track"><div></div></div><p class="notice" aria-live="polite"></p></section><section class="canvas-wrap"><div class="canvas"><div class="card-pet-layer" aria-hidden="true"></div><div class="card-hud"><div class="focused-progress"><span class="focused-progress-label"></span><div class="focused-progress-track" role="progressbar" aria-label="Tiến độ bộ thẻ" aria-valuemin="1" aria-valuemax="${deck.questions.length}" aria-valuenow="1"><div></div></div></div></div><button class="card-favorite" type="button" aria-label="Đánh dấu thẻ yêu thích" aria-pressed="false"><span aria-hidden="true">♡</span></button></div><p class="hint">Vuốt trái: câu tiếp theo · Vuốt phải: câu trước</p><div class="actions"><button class="previous">← Câu trước</button><button class="reveal">Mở thẻ</button><button class="next">Câu tiếp →</button></div><button class="close" aria-label="Đóng thẻ">Đóng ×</button></section></main><div class="screen-dim" aria-hidden="true"></div>`);
+  shell(`<main class="play"><section class="play-info"><button class="back">← Các bộ bài</button><p class="eyebrow">${deck.description}</p><h1>${deck.name}</h1><p>Vuốt trái để xem câu tiếp · Vuốt phải để quay lại câu trước.</p><div class="progress"></div><div class="track"><div></div></div><button class="deck-saved-link" type="button">♥ Thẻ đã lưu trong bộ này (0)</button><p class="notice" aria-live="polite"></p></section><section class="canvas-wrap"><div class="canvas"><div class="card-pet-layer" aria-hidden="true"></div><div class="card-hud"><div class="focused-progress"><span class="focused-progress-label"></span><div class="focused-progress-track" role="progressbar" aria-label="Tiến độ bộ thẻ" aria-valuemin="1" aria-valuemax="${deck.questions.length}" aria-valuenow="1"><div></div></div></div></div><button class="card-favorite" type="button" aria-label="Đánh dấu thẻ yêu thích" aria-pressed="false"><span aria-hidden="true">♡</span></button></div><p class="hint">Vuốt trái: câu tiếp theo · Vuốt phải: câu trước</p><div class="actions"><button class="previous">← Câu trước</button><button class="reveal">Mở thẻ</button><button class="next">Câu tiếp →</button></div><button class="close" aria-label="Đóng thẻ">Đóng ×</button></section></main><div class="screen-dim" aria-hidden="true"></div>`);
   app.querySelector('.back').onclick = home;
   const mount = app.querySelector('.canvas');
   const petMount=mount.querySelector('.card-pet-layer');
@@ -238,6 +245,7 @@ function play(deck) {
     favoriteButton?.setAttribute('aria-pressed', String(favorite));
     favoriteButton?.setAttribute('aria-label', favorite ? 'Bỏ thẻ khỏi yêu thích' : 'Đánh dấu thẻ yêu thích');
     if (favoriteButton) favoriteButton.querySelector('span').textContent = '♥';
+    app.querySelector('.deck-saved-link').textContent = `♥ Thẻ đã lưu trong bộ này (${savedCards(deck).length})`;
     const label = app.querySelector('.focused-progress-label');
     if (label) label.textContent = `Thẻ ${state.index + 1} / ${deck.questions.length}`;
     const focusedTrack = app.querySelector('.focused-progress-track');
@@ -299,6 +307,7 @@ function play(deck) {
     app.querySelector('.reveal').disabled = false;
   }
   app.querySelector('.reveal').onclick = revealCard;
+  app.querySelector('.deck-saved-link').onclick = () => showSavedCards(deck,()=>play(deck));
   app.querySelector('.card-favorite').onclick = () => {
     const current = new Set(favorites[deck.id] || []), questionIndex = state.order[state.index];
     if (current.has(questionIndex)) current.delete(questionIndex); else current.add(questionIndex);
@@ -347,6 +356,7 @@ function play(deck) {
       if (disposed) return;
       fontReady = true;
       update();
+      if(openSavedCard)requestAnimationFrame(revealCard);
     });
   }, undefined, () => {
     if (!disposed) app.querySelector('.notice').textContent = 'Không tải được bộ bài 3D.';
