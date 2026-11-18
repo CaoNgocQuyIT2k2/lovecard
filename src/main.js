@@ -170,7 +170,7 @@ function play(deck) {
       return;
     }
     app.querySelector('.notice').textContent = '';
-    navigation = { direction, exitX: direction * 0.18, enterX: direction > 0 ? -0.18 : 0.18, phase: 'out', start: performance.now(), fromX: card.position.x, fromZ: card.rotation.z };
+    navigation = { direction, exitX: direction * 0.18, enterX: direction > 0 ? 0.18 : -0.18, phase: 'out', start: performance.now(), fromX: card.position.x, fromZ: card.rotation.z };
   }
   function closeFocused() {
     if (!card || !focused || navigation || lift) return;
