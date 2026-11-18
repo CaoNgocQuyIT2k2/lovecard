@@ -245,7 +245,7 @@ function play(deck) {
     const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
     pointer = null;
     if (event.type === 'pointercancel') return;
-    if (focused && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) moveQuestion(Math.sign(dx));
+    if (focused && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) moveQuestion(dx < 0 ? 1 : -1);
     else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) revealCard();
   }
   canvas.addEventListener('pointerup', endPointer);
